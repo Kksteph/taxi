@@ -82,6 +82,14 @@ export async function sendTaxEmail(payload: TaxEmailPayload): Promise<void> {
 </html>
   `.trim()
 
+  const fromRaw = process.env.EMAIL_FROM ?? 'noreply@usetaxi.xyz'
+  // Ensure proper "Name <email>" format
+  const from = fromRaw.includes('<') ? fromRaw : `Tax Filing Portal <${fromRaw}>`
+
+  console.log('[email] Sending to:', to)
+  console.log('[email] From:', from)
+  console.log('[email] API key set:', !!process.env.RESEND_API_KEY)
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -89,15 +97,17 @@ export async function sendTaxEmail(payload: TaxEmailPayload): Promise<void> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: process.env.EMAIL_FROM ?? 'Tax Portal <noreply@yourdomain.com>',
+      from,
       to,
       subject: `Your ${year} Annual Tax Summary is Ready`,
       html,
     }),
   })
 
+  const responseText = await res.text()
+  console.log('[email] Resend response:', res.status, responseText)
+
   if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Email send failed: ${err}`)
+    throw new Error(`Email send failed (${res.status}): ${responseText}`)
   }
 }

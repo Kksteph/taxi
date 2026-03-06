@@ -35,8 +35,10 @@ export async function POST(req: NextRequest) {
     if (recErr || !records?.length) {
       results.skipped++
       results.errors.push(`${employee.name}: missing monthly records`)
+      console.log(`[generate] SKIPPED ${employee.name} — no monthly records for ${year}`)
       continue
     }
+    console.log(`[generate] Processing ${employee.name} — ${records.length} monthly records found`)
 
     // Compute tax — server-side only
     const computation = computeTaxSummary(records as MonthlyRecord[])
@@ -90,6 +92,7 @@ export async function POST(req: NextRequest) {
 
     // Send email
     if (send_email) {
+      console.log(`[generate] Sending email to ${employee.email}`)
       try {
         await sendTaxEmail({
           to: employee.email,
@@ -103,7 +106,9 @@ export async function POST(req: NextRequest) {
           email_sent_at: new Date().toISOString(),
         }).eq('employee_id', employee.id).eq('year', year)
       } catch (e) {
-        results.errors.push(`${employee.name}: email failed — summary still generated`)
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error(`[generate] Email FAILED for ${employee.name}:`, msg)
+        results.errors.push(`${employee.name}: email failed — ${msg}`)
       }
     }
 
