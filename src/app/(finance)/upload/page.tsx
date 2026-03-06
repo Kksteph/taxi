@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { UploadZone } from '@/components/shared/UploadZone'
 import { WorkbookUpload } from '@/components/finance/WorkbookUpload'
 import { Button } from '@/components/ui/button'
@@ -271,11 +271,11 @@ function UploadResultCard({ result }: { result: UploadResult | null }) {
             <div className="bg-red-50 px-3 py-2 font-semibold text-red-700">Field</div>
             <div className="bg-red-50 px-3 py-2 font-semibold text-red-700">Error</div>
             {result.errors.slice(0, 10).map((err, i) => (
-              <>
-                <div key={`r${i}`} className="border-t border-red-100 px-3 py-1.5 text-slate-500">{err.row || '—'}</div>
-                <div key={`f${i}`} className="border-t border-red-100 px-3 py-1.5"><code className="text-red-600">{err.field}</code></div>
-                <div key={`m${i}`} className="border-t border-red-100 px-3 py-1.5 text-slate-600">{err.message}</div>
-              </>
+              <React.Fragment key={i}>
+                <div className="border-t border-red-100 px-3 py-1.5 text-slate-500">{err.row || '—'}</div>
+                <div className="border-t border-red-100 px-3 py-1.5"><code className="text-red-600">{err.field}</code></div>
+                <div className="border-t border-red-100 px-3 py-1.5 text-slate-600">{err.message}</div>
+              </React.Fragment>
             ))}
           </div>
           {result.errors.length > 10 && (
