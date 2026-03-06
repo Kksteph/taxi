@@ -18,7 +18,14 @@ export function DownloadPDFButton({ token, year, employeeName }: Props) {
     setLoading(true)
     try {
       const res = await fetch(`/api/pdf/${token}`)
-      if (!res.ok) throw new Error('PDF not available')
+      if (!res.ok) {
+        const contentType = res.headers.get('content-type') ?? ''
+        if (contentType.includes('application/json')) {
+          const json = await res.json()
+          throw new Error(json.error ?? `HTTP ${res.status}`)
+        }
+        throw new Error(`HTTP ${res.status}`)
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -27,8 +34,8 @@ export function DownloadPDFButton({ token, year, employeeName }: Props) {
       a.click()
       URL.revokeObjectURL(url)
       toast.success('PDF downloaded')
-    } catch {
-      toast.error('PDF not available. Contact your finance team.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'PDF not available. Contact your finance team.')
     } finally {
       setLoading(false)
     }
