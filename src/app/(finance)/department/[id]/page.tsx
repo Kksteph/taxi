@@ -84,8 +84,6 @@ export default async function DepartmentPage({
       <EmployeeTable
         employees={employeesWithStatus}
         year={year}
-        onRegenerateLink={async () => {}}
-        onDownloadReceipt={() => {}}
       />
     </div>
   )
