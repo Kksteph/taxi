@@ -46,11 +46,15 @@ function findLabelCell(matrix: Matrix, label: string): { r: number; c: number } 
   return null
 }
 
-/** Get the value in the cell immediately to the right of a label */
+/** Get the first non-null value to the right of a label (skips empty cells) */
 function getValueRight(matrix: Matrix, label: string): Cell {
   const pos = findLabelCell(matrix, label)
   if (!pos) return null
-  return matrix[pos.r]?.[pos.c + 1] ?? null
+  const row = matrix[pos.r] ?? []
+  for (let c = pos.c + 1; c < row.length; c++) {
+    if (row[c] !== null && row[c] !== undefined && row[c] !== '') return row[c]
+  }
+  return null
 }
 
 function toNum(val: Cell): number {
