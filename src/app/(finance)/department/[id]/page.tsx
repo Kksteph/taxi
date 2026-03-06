@@ -1,4 +1,4 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { EmployeeTable } from '@/components/finance/EmployeeTable'
 import { DepartmentActions } from '@/components/finance/DepartmentActions'
 import { notFound } from 'next/navigation'
@@ -28,18 +28,34 @@ export default async function DepartmentPage({
 
   if (!department) notFound()
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/departments/${id}?year=${year}`,
-    { cache: 'no-store' }
-  )
-  const { data: employees } = await res.json() as { data: EmployeeWithStatus[] }
+  // Fetch employees with summaries and receipts directly
+  const { data: employees } = await supabase
+    .from('employees')
+    .select(`
+      *,
+      department:departments(id, name),
+      summaries:tax_summaries(id, status, email_sent_at, viewed_at, generated_at, magic_token, token_expires_at, year),
+      receipts(id, file_url, file_path, file_name, submitted_at, replaced_at, year)
+    `)
+    .eq('department_id', id)
+    .order('name', { ascending: true })
 
-  const submitted = employees?.filter(e => e.summary?.status === 'submitted').length ?? 0
-  const total = employees?.length ?? 0
+  // Filter to requested year
+  const employeesWithStatus: EmployeeWithStatus[] = (employees ?? []).map(emp => ({
+    ...emp,
+    summary: (emp.summaries as { year: number }[])?.find((s) => s.year === year) ?? null,
+    receipt: (emp.receipts as { year: number; replaced_at: string | null }[])
+      ?.find((r) => r.year === year && !r.replaced_at) ?? null,
+    summaries: undefined,
+    receipts: undefined,
+  }))
+
+  const submitted = employeesWithStatus.filter(e => e.summary?.status === 'submitted').length
+  const total = employeesWithStatus.length
 
   return (
     <div className="space-y-6">
-      {/* Back button + header */}
+      {/* Back + header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href={`/dashboard?year=${year}`}>
@@ -61,12 +77,12 @@ export default async function DepartmentPage({
           </div>
         </div>
 
-        <DepartmentActions departmentId={id} year={year} employees={employees ?? []} />
+        <DepartmentActions departmentId={id} year={year} employees={employeesWithStatus} />
       </div>
 
       {/* Table */}
       <EmployeeTable
-        employees={employees ?? []}
+        employees={employeesWithStatus}
         year={year}
         onRegenerateLink={async () => {}}
         onDownloadReceipt={() => {}}
