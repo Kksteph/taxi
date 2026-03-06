@@ -2,7 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { createServiceClient } from '@/lib/supabase/server'
-import type { EmployeeCsvRow, UploadResult, UploadValidationError } from '@/types'
+import type { UploadResult, UploadValidationError } from '@/types'
+
+// Accepts many common column name variations
+function normalizeRow(raw: Record<string, string>) {
+  const get = (...keys: string[]): string => {
+    for (const k of keys) {
+      const val = raw[k] ?? raw[k.toLowerCase()] ?? raw[k.toUpperCase()]
+      if (val?.toString().trim()) return val.toString().trim()
+    }
+    return ''
+  }
+
+  return {
+    employee_id: get('employee_id', 'employeeid', 'id', 'staff_id', 'staffid', 'emp_id', 'empid', 'employee id', 'staff id'),
+    name:        get('name', 'full_name', 'fullname', 'full name', 'employee_name', 'employeename', 'employee name'),
+    email:       get('email', 'email_address', 'emailaddress', 'work_email', 'workemail', 'work email', 'mail'),
+    department:  get('department', 'dept', 'department_name', 'departmentname', 'division'),
+  }
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createServiceClient()
@@ -11,28 +29,28 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-  const rows = await parseFile<EmployeeCsvRow>(file)
+  const rawRows = await parseFile(file)
   const errors: UploadValidationError[] = []
-  const valid: EmployeeCsvRow[] = []
+  const valid: ReturnType<typeof normalizeRow>[] = []
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
-    const rowNum = i + 2 // 1-indexed + header
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = normalizeRow(rawRows[i])
+    const rowNum = i + 2
 
-    if (!row.employee_id?.trim()) {
-      errors.push({ row: rowNum, field: 'employee_id', message: 'Missing employee_id' })
+    if (!row.employee_id) {
+      errors.push({ row: rowNum, field: 'employee_id', message: 'Missing employee ID — accepted column names: id, employee_id, staff_id, emp_id' })
       continue
     }
-    if (!row.name?.trim()) {
-      errors.push({ row: rowNum, field: 'name', message: 'Missing name' })
+    if (!row.name) {
+      errors.push({ row: rowNum, field: 'name', message: 'Missing name — accepted column names: name, full_name, employee_name' })
       continue
     }
-    if (!row.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
-      errors.push({ row: rowNum, field: 'email', message: 'Invalid or missing email' })
+    if (!row.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+      errors.push({ row: rowNum, field: 'email', message: 'Invalid or missing email — accepted column names: email, work_email, mail' })
       continue
     }
-    if (!row.department?.trim()) {
-      errors.push({ row: rowNum, field: 'department', message: 'Missing department' })
+    if (!row.department) {
+      errors.push({ row: rowNum, field: 'department', message: 'Missing department — accepted column names: department, dept, division' })
       continue
     }
     valid.push(row)
@@ -43,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert departments
-  const deptNames = [...new Set(valid.map(r => r.department.trim()))]
+  const deptNames = [...new Set(valid.map(r => r.department))]
   const { data: existingDepts } = await supabase.from('departments').select('id, name')
   const deptMap = new Map<string, string>()
   existingDepts?.forEach(d => deptMap.set(d.name.toLowerCase(), d.id))
@@ -61,37 +79,45 @@ export async function POST(req: NextRequest) {
   let skipped = 0
 
   for (const row of valid) {
-    const dept_id = deptMap.get(row.department.trim().toLowerCase())
+    const dept_id = deptMap.get(row.department.toLowerCase())
     const { error } = await supabase.from('employees').upsert({
-      employee_id: row.employee_id.trim(),
-      name: row.name.trim(),
-      email: row.email.trim().toLowerCase(),
+      employee_id:   row.employee_id,
+      name:          row.name,
+      email:         row.email.toLowerCase(),
       department_id: dept_id ?? null,
     }, { onConflict: 'employee_id', ignoreDuplicates: false })
 
-    if (error) {
-      skipped++
-    } else {
-      inserted++
-    }
+    if (error) skipped++
+    else inserted++
   }
 
   const result: UploadResult = { success: true, inserted, skipped, errors: [] }
   return NextResponse.json({ data: result, error: null })
 }
 
-async function parseFile<T>(file: File): Promise<T[]> {
+async function parseFile(file: File): Promise<Record<string, string>[]> {
   const ext = file.name.split('.').pop()?.toLowerCase()
   const buffer = await file.arrayBuffer()
 
   if (ext === 'csv') {
     const text = new TextDecoder().decode(buffer)
-    const result = Papa.parse<T>(text, { header: true, skipEmptyLines: true, transformHeader: h => h.trim().toLowerCase().replace(/\s+/g, '_') })
+    const result = Papa.parse<Record<string, string>>(text, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: h => h.trim().toLowerCase().replace(/\s+/g, '_'),
+    })
     return result.data
   }
 
-  // xlsx / xls
+  // xlsx / xls — normalize headers the same way
   const wb = XLSX.read(buffer, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  return XLSX.utils.sheet_to_json<T>(ws, { defval: '' })
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+  return rows.map(row => {
+    const normalized: Record<string, string> = {}
+    for (const [k, v] of Object.entries(row)) {
+      normalized[k.trim().toLowerCase().replace(/\s+/g, '_')] = String(v)
+    }
+    return normalized
+  })
 }
