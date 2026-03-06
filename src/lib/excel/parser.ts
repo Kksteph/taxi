@@ -47,12 +47,30 @@ function findLabelCell(matrix: Matrix, label: string): { r: number; c: number } 
 }
 
 /** Get the first non-null value to the right of a label (skips empty cells) */
-function getValueRight(matrix: Matrix, label: string): Cell {
-  const pos = findLabelCell(matrix, label)
-  if (!pos) return null
-  const row = matrix[pos.r] ?? []
-  for (let c = pos.c + 1; c < row.length; c++) {
-    if (row[c] !== null && row[c] !== undefined && row[c] !== '') return row[c]
+function getValueRight(matrix: Matrix, label: string, fromRow = 0): Cell {
+  const l = label.toLowerCase()
+  for (let r = fromRow; r < matrix.length; r++) {
+    for (let c = 0; c < matrix[r].length; c++) {
+      const cell = matrix[r][c]
+      if (typeof cell === 'string' && cell.toLowerCase().trim() === l) {
+        const row = matrix[r] ?? []
+        for (let cc = c + 1; cc < row.length; cc++) {
+          if (row[cc] !== null && row[cc] !== undefined && row[cc] !== '') return row[cc]
+        }
+      }
+    }
+  }
+  // fallback: partial match from fromRow
+  for (let r = fromRow; r < matrix.length; r++) {
+    for (let c = 0; c < matrix[r].length; c++) {
+      const cell = matrix[r][c]
+      if (typeof cell === 'string' && cell.toLowerCase().includes(l)) {
+        const row = matrix[r] ?? []
+        for (let cc = c + 1; cc < row.length; cc++) {
+          if (row[cc] !== null && row[cc] !== undefined && row[cc] !== '') return row[cc]
+        }
+      }
+    }
   }
   return null
 }
@@ -188,15 +206,19 @@ export function parseEmployeeSheet(
   }
 
   // ── Section 5: Tax Summary ───────────────────────────────
+  // Search from the "SUMMARY FOR FILING" header row to avoid matching
+  // "Tax Paid on Account" in the monthly table
+  const summaryHeaderRow = Math.max(0, findLabelRow(matrix, 'SUMMARY FOR FILING'))
+
   const taxSummary: ParsedTaxSummary = {
-    basicSalary:      round2(toNum(getValueRight(matrix, 'Basic Salary (Total)'))),
-    cashAllowances:   round2(toNum(getValueRight(matrix, 'Cash Allowances'))),
-    socialSecurity:   round2(toNum(getValueRight(matrix, 'Social Security'))),
-    excessBonus:      round2(toNum(getValueRight(matrix, 'Excess Bonus'))),
-    chargeableIncome: round2(toNum(getValueRight(matrix, 'Chargeable Income'))),
-    taxCharged:       round2(toNum(getValueRight(matrix, 'Tax Charged'))),
-    taxPaid:          round2(toNum(getValueRight(matrix, 'Tax Paid'))),
-    taxOutstanding:   round2(toNum(getValueRight(matrix, 'Tax Outstanding'))),
+    basicSalary:      round2(toNum(getValueRight(matrix, 'Basic Salary (Total)', summaryHeaderRow))),
+    cashAllowances:   round2(toNum(getValueRight(matrix, 'Cash Allowances',      summaryHeaderRow))),
+    socialSecurity:   round2(toNum(getValueRight(matrix, 'Social Security',      summaryHeaderRow))),
+    excessBonus:      round2(toNum(getValueRight(matrix, 'Excess Bonus',         summaryHeaderRow))),
+    chargeableIncome: round2(toNum(getValueRight(matrix, 'Chargeable Income',    summaryHeaderRow))),
+    taxCharged:       round2(toNum(getValueRight(matrix, 'Tax Charged',          summaryHeaderRow))),
+    taxPaid:          round2(toNum(getValueRight(matrix, 'Tax Paid',             summaryHeaderRow))),
+    taxOutstanding:   round2(toNum(getValueRight(matrix, 'Tax Outstanding',      summaryHeaderRow))),
   }
 
   if (errors.length > 0 || !employeeName || !employeeId || isNaN(taxYear)) {
