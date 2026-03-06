@@ -5,23 +5,18 @@ import { UploadZone } from '@/components/shared/UploadZone'
 import { WorkbookUpload } from '@/components/finance/WorkbookUpload'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import {
-  CheckCircle2, AlertCircle, Loader2, Users, DollarSign,
-  FileSpreadsheet, ChevronRight, Info, BookOpen,
-} from 'lucide-react'
+import { CheckCircle2, AlertCircle, Loader2, Users, BookOpen, ChevronRight, Info } from 'lucide-react'
 import type { UploadResult } from '@/types'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
-type Step = 'employees' | 'workbook' | 'payroll'
-
+type Step = 'employees' | 'workbook'
 type Department = { id: string; name: string }
 
 export default function UploadPage() {
   const [step, setStep] = useState<Step>('employees')
   const [empFile, setEmpFile] = useState<File | null>(null)
-  const [payFile, setPayFile] = useState<File | null>(null)
-  const [year, setYear] = useState(new Date().getFullYear().toString())
+  const [year] = useState(new Date().getFullYear().toString())
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<UploadResult | null>(null)
   const [departments, setDepartments] = useState<Department[]>([])
@@ -53,45 +48,22 @@ export default function UploadPage() {
     }
   }
 
-  const handlePayrollUpload = async () => {
-    if (!payFile || !year) return
-    setLoading(true)
-    setResult(null)
-    const form = new FormData()
-    form.append('file', payFile)
-    form.append('year', year)
-    try {
-      const res = await fetch('/api/payroll/upload', { method: 'POST', body: form })
-      const json = await res.json()
-      setResult(json.data)
-      if (json.data?.success) {
-        toast.success(`${json.data.inserted} payroll records imported`)
-      }
-    } catch {
-      toast.error('Upload failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const steps: { id: Step; label: string; icon: React.ElementType }[] = [
-    { id: 'employees', label: 'Employee Master',   icon: Users },
-    { id: 'workbook',  label: 'Salary Workbook',   icon: BookOpen },
-    { id: 'payroll',   label: 'Simple CSV Import',  icon: DollarSign },
+    { id: 'employees', label: 'Employee Master', icon: Users },
+    { id: 'workbook',  label: 'Salary Workbook', icon: BookOpen },
   ]
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Upload Data</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Import employee records and salary data to generate tax summaries
+          Import employee records and salary workbooks to generate tax summaries
         </p>
       </div>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2">
         {steps.map((s, i) => (
           <div key={s.id} className="flex items-center gap-2">
             <button
@@ -115,7 +87,7 @@ export default function UploadPage() {
         ))}
       </div>
 
-      {/* ── Step 1: Employee Master ────────────────────────── */}
+      {/* Step 1: Employee Master */}
       {step === 'employees' && (
         <div className="space-y-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
@@ -168,77 +140,10 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* ── Step 2: Salary Workbook ────────────────────────── */}
+      {/* Step 2: Salary Workbook */}
       {step === 'workbook' && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <WorkbookUpload departments={departments} year={parseInt(year)} />
-        </div>
-      )}
-
-      {/* ── Step 3: Simple CSV (legacy) ────────────────────── */}
-      {step === 'payroll' && (
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
-                <DollarSign className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Simple CSV Import</h2>
-                <p className="text-sm text-slate-500">Import a flat payroll CSV — one row per employee per month</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-slate-700">Tax Year</label>
-              <input
-                type="number"
-                min={2020}
-                max={new Date().getFullYear()}
-                value={year}
-                onChange={e => setYear(e.target.value)}
-                className="w-24 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-800 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
-              />
-            </div>
-
-            <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Info className="h-4 w-4 text-slate-400" />
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Required columns</p>
-              </div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                {[
-                  ['employee_id', 'Must match employee master'],
-                  ['month', '1–12'],
-                  ['basic', 'Basic salary'],
-                  ['allowance', 'Allowances'],
-                  ['ssnit', 'SSNIT / Tier 2'],
-                  ['tax', 'Tax charged'],
-                ].map(([col, desc]) => (
-                  <div key={col} className="flex gap-2">
-                    <code className="text-xs font-mono text-emerald-600">{col}</code>
-                    <span className="text-xs text-slate-400">{desc}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <UploadZone
-              label="Drop your payroll CSV or Excel file here"
-              accept=".csv,.xlsx,.xls"
-              onFile={setPayFile}
-              disabled={loading}
-            />
-
-            <Button
-              onClick={handlePayrollUpload}
-              disabled={!payFile || loading}
-              className="w-full bg-emerald-600 text-white hover:bg-emerald-500"
-            >
-              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Importing…</> : 'Import Payroll'}
-            </Button>
-          </div>
-          <UploadResultCard result={result} />
         </div>
       )}
     </div>
