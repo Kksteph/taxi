@@ -1,0 +1,274 @@
+'use client'
+
+import { useState } from 'react'
+import { UploadZone } from '@/components/shared/UploadZone'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
+import {
+  CheckCircle2, AlertCircle, Loader2, Users, DollarSign,
+  FileSpreadsheet, ChevronRight, Info
+} from 'lucide-react'
+import type { UploadResult } from '@/types'
+
+type Step = 'employees' | 'payroll'
+
+export default function UploadPage() {
+  const [step, setStep] = useState<Step>('employees')
+  const [empFile, setEmpFile] = useState<File | null>(null)
+  const [payFile, setPayFile] = useState<File | null>(null)
+  const [year, setYear] = useState(new Date().getFullYear().toString())
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<UploadResult | null>(null)
+
+  const handleEmployeeUpload = async () => {
+    if (!empFile) return
+    setLoading(true)
+    setResult(null)
+    const form = new FormData()
+    form.append('file', empFile)
+    try {
+      const res = await fetch('/api/employees/upload', { method: 'POST', body: form })
+      const json = await res.json()
+      setResult(json.data)
+      if (json.data?.success) {
+        toast.success(`${json.data.inserted} employees imported`)
+        setStep('payroll')
+      }
+    } catch {
+      toast.error('Upload failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePayrollUpload = async () => {
+    if (!payFile || !year) return
+    setLoading(true)
+    setResult(null)
+    const form = new FormData()
+    form.append('file', payFile)
+    form.append('year', year)
+    try {
+      const res = await fetch('/api/payroll/upload', { method: 'POST', body: form })
+      const json = await res.json()
+      setResult(json.data)
+      if (json.data?.success) {
+        toast.success(`${json.data.inserted} payroll records imported`)
+      }
+    } catch {
+      toast.error('Upload failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-8 max-w-2xl mx-auto">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Upload Data</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Import employee records and payroll data to generate tax summaries
+        </p>
+      </div>
+
+      {/* Step indicator */}
+      <div className="flex items-center gap-3">
+        {['employees', 'payroll'].map((s, i) => (
+          <div key={s} className="flex items-center gap-3">
+            <button
+              onClick={() => setStep(s as Step)}
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                step === s
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${
+                step === s ? 'bg-white/20' : 'bg-slate-100'
+              }`}>{i + 1}</span>
+              {s === 'employees' ? 'Employee Master' : 'Salary Workbook'}
+            </button>
+            {i === 0 && <ChevronRight className="h-4 w-4 text-slate-300" />}
+          </div>
+        ))}
+      </div>
+
+      {/* Employee upload */}
+      {step === 'employees' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Employee Master</h2>
+                <p className="text-sm text-slate-500">Upload employee roster with department assignments</p>
+              </div>
+            </div>
+
+            {/* Format guide */}
+            <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-4 w-4 text-slate-400" />
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                  Required columns
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                {[
+                  ['employee_id', 'Unique payroll system ID'],
+                  ['name', 'Full name'],
+                  ['email', 'Work email address'],
+                  ['department', 'Department name'],
+                ].map(([col, desc]) => (
+                  <div key={col} className="flex gap-2">
+                    <code className="text-xs font-mono text-blue-600">{col}</code>
+                    <span className="text-xs text-slate-400">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <UploadZone
+              label="Drop your employee CSV or Excel file here"
+              accept=".csv,.xlsx,.xls"
+              onFile={setEmpFile}
+              disabled={loading}
+            />
+
+            <Button
+              onClick={handleEmployeeUpload}
+              disabled={!empFile || loading}
+              className="w-full bg-blue-600 text-white hover:bg-blue-500"
+            >
+              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Importing…</> : 'Import Employees'}
+            </Button>
+          </div>
+
+          <UploadResultCard result={result} />
+        </div>
+      )}
+
+      {/* Payroll upload */}
+      {step === 'payroll' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
+                <DollarSign className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Salary Workbook</h2>
+                <p className="text-sm text-slate-500">Upload monthly payroll data for the selected year</p>
+              </div>
+            </div>
+
+            {/* Year selector */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-700">Tax Year</label>
+              <input
+                type="number"
+                min={2020}
+                max={new Date().getFullYear()}
+                value={year}
+                onChange={e => setYear(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-800 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+              />
+            </div>
+
+            {/* Format guide */}
+            <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="h-4 w-4 text-slate-400" />
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                  Required columns
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                {[
+                  ['employee_id', 'Must match employee master'],
+                  ['month', '1–12'],
+                  ['basic', 'Basic salary (numeric)'],
+                  ['allowance', 'Allowances (numeric)'],
+                  ['ssnit', 'SSNIT deduction (numeric)'],
+                  ['tax', 'Tax charged (numeric)'],
+                ].map(([col, desc]) => (
+                  <div key={col} className="flex gap-2">
+                    <code className="text-xs font-mono text-emerald-600">{col}</code>
+                    <span className="text-xs text-slate-400">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <UploadZone
+              label="Drop your payroll CSV or Excel file here"
+              accept=".csv,.xlsx,.xls"
+              onFile={setPayFile}
+              disabled={loading}
+            />
+
+            <Button
+              onClick={handlePayrollUpload}
+              disabled={!payFile || loading}
+              className="w-full bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Importing…</> : 'Import Payroll'}
+            </Button>
+          </div>
+
+          <UploadResultCard result={result} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UploadResultCard({ result }: { result: UploadResult | null }) {
+  if (!result) return null
+
+  return (
+    <div className={`rounded-2xl p-5 shadow-sm ring-1 space-y-3 ${
+      result.success ? 'bg-emerald-50 ring-emerald-200' : 'bg-red-50 ring-red-200'
+    }`}>
+      <div className="flex items-center gap-2">
+        {result.success ? (
+          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+        ) : (
+          <AlertCircle className="h-5 w-5 text-red-500" />
+        )}
+        <p className={`font-semibold text-sm ${result.success ? 'text-emerald-800' : 'text-red-700'}`}>
+          {result.success
+            ? `${result.inserted} records imported successfully${result.skipped > 0 ? `, ${result.skipped} skipped` : ''}`
+            : 'Upload failed — please fix the errors below'}
+        </p>
+      </div>
+
+      {result.errors.length > 0 && (
+        <div className="rounded-xl border border-red-200 bg-white overflow-hidden">
+          <div className="grid grid-cols-[auto,1fr,1fr] text-xs">
+            <div className="bg-red-50 px-3 py-2 font-semibold text-red-700">Row</div>
+            <div className="bg-red-50 px-3 py-2 font-semibold text-red-700">Field</div>
+            <div className="bg-red-50 px-3 py-2 font-semibold text-red-700">Error</div>
+            {result.errors.slice(0, 10).map((err, i) => (
+              <>
+                <div key={`r${i}`} className="border-t border-red-100 px-3 py-1.5 text-slate-500">{err.row || '—'}</div>
+                <div key={`f${i}`} className="border-t border-red-100 px-3 py-1.5">
+                  <code className="text-red-600">{err.field}</code>
+                </div>
+                <div key={`m${i}`} className="border-t border-red-100 px-3 py-1.5 text-slate-600">{err.message}</div>
+              </>
+            ))}
+          </div>
+          {result.errors.length > 10 && (
+            <p className="px-3 py-2 text-xs text-red-400 border-t border-red-100">
+              …and {result.errors.length - 10} more errors
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
