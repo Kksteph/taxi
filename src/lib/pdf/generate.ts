@@ -3,7 +3,7 @@ import type { Employee, TaxSummary, MonthlyRecord } from '@/types'
 import { MONTH_NAMES } from '@/lib/tax/compute'
 
 const GHS = (n: number) =>
-  new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(n)
+  'GHS ' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export async function generateTaxPDF(
   employee: Employee,
