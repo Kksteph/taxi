@@ -54,12 +54,13 @@ export async function generateTaxPDF(
   page.drawText('ANNUAL SUMMARY', { x: 40, y, size: 8, font: fontBold, color: slate600 })
   y -= 18
 
+  const n = (v: unknown) => Number(v) || 0
   const cards = [
-    { label: 'Total Basic Salary',    value: GHS(summary.total_basic) },
-    { label: 'Total Cash Allowance',  value: GHS(summary.total_allowance) },
-    { label: 'Total SSNIT',           value: GHS(summary.total_ssnit) },
-    { label: 'Chargeable Income',     value: GHS(summary.chargeable_income) },
-    { label: 'Total Tax Charged',     value: GHS(summary.total_tax) },
+    { label: 'Total Basic Salary',    value: GHS(n(summary.total_basic)) },
+    { label: 'Total Cash Allowance',  value: GHS(n(summary.total_allowance)) },
+    { label: 'Total SSNIT',           value: GHS(n(summary.total_ssnit)) },
+    { label: 'Chargeable Income',     value: GHS(n(summary.chargeable_income)) },
+    { label: 'Total Tax Charged',     value: GHS(n(summary.total_tax)) },
   ]
 
   const cardW = (width - 80 - 16) / 2
@@ -124,8 +125,8 @@ export async function generateTaxPDF(
 
   // Totals row
   page.drawRectangle({ x: 40, y: y - 16, width: width - 80, height: 17, color: slate900 })
-  const totals = ['TOTAL', summary.total_basic.toFixed(2), summary.total_allowance.toFixed(2),
-                  summary.total_ssnit.toFixed(2), summary.total_tax.toFixed(2)]
+  const totals = ['TOTAL', n(summary.total_basic).toFixed(2), n(summary.total_allowance).toFixed(2),
+                  n(summary.total_ssnit).toFixed(2), n(summary.total_tax).toFixed(2)]
   totals.forEach((v, ci) => {
     page.drawText(v, { x: cols[ci] + 4, y: y - 11, size: 8, font: fontBold, color: white })
   })

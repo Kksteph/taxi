@@ -14,31 +14,13 @@ type Props = {
 export function DownloadPDFButton({ token, year, employeeName }: Props) {
   const [loading, setLoading] = useState(false)
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     setLoading(true)
-    try {
-      const res = await fetch(`/api/pdf/${token}`)
-      if (!res.ok) {
-        const contentType = res.headers.get('content-type') ?? ''
-        if (contentType.includes('application/json')) {
-          const json = await res.json()
-          throw new Error(json.error ?? `HTTP ${res.status}`)
-        }
-        throw new Error(`HTTP ${res.status}`)
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${year}_tax_summary_${employeeName.replace(/\s+/g, '_')}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-      toast.success('PDF downloaded')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'PDF not available. Contact your finance team.')
-    } finally {
-      setLoading(false)
-    }
+    // Direct navigation — browser handles the download natively.
+    // Works for both proxied PDF bytes and signed URL redirects.
+    window.location.href = `/api/pdf/${token}`
+    // Reset loading after a short delay (download starts in background)
+    setTimeout(() => setLoading(false), 3000)
   }
 
   return (
